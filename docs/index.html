@@ -268,7 +268,8 @@
   <section class="hero">
     <div class="wrap">
       <div class="badges">
-        <span class="pill accent"><span class="dot"></span>v1.0.0-production</span>
+        <span class="pill accent"><span class="dot"></span>v1.0.0-production</span> <!-- x-release-please-version -->
+
         <span class="pill">Open Source</span>
         <span class="pill">Apache-2.0</span>
       </div>
@@ -307,10 +308,9 @@
 helm repo add opscalehub https://opscalehub.github.io/cert-manager-webhook-arvancloud
 helm repo update
 
-<span class="c"># 2. Install the webhook alongside cert-manager</span>
+<span class="c"># 2. Install the webhook alongside cert-manager (add --version to pin)</span>
 helm install arvancloud-webhook opscalehub/arvancloud-webhook \
-  --namespace cert-manager \
-  --version <span class="g">1.0.0</span>
+  --namespace cert-manager
 
 <span class="c"># 3. Provide your ArvanCloud Machine User API key</span>
 kubectl -n cert-manager create secret generic arvancloud-credentials \

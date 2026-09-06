@@ -2,11 +2,12 @@ name: release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: write
   packages: write
   id-token: write # keyless cosign signing (Sigstore OIDC)
 
@@ -14,10 +15,32 @@ env:
   HELM_VERSION: v3.18.4
 
 jobs:
+  # Maintains the release PR (CHANGELOG + version bumps in Chart.yaml and the
+  # landing page). Merging that PR creates the git tag + GitHub Release and
+  # flips release_created, which gates the publish jobs below.
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+      version: ${{ steps.rp.outputs.version }}
+      major: ${{ steps.rp.outputs.major }}
+      minor: ${{ steps.rp.outputs.minor }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: rp
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
   image:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -32,8 +55,10 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ needs.release-please.outputs.version }}
+            type=raw,value=${{ needs.release-please.outputs.major }}.${{ needs.release-please.outputs.minor }}
+            type=raw,value=${{ needs.release-please.outputs.major }}
+            type=raw,value=latest
       - id: build
         uses: docker/build-push-action@v6
         with:
@@ -43,7 +68,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ github.ref_name }}
+            VERSION=${{ needs.release-please.outputs.tag_name }}
           provenance: true
           sbom: true
 
@@ -59,36 +84,30 @@ jobs:
           fi
 
   chart:
+    needs: [release-please, image]
+    if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
-    needs: image
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
       - uses: azure/setup-helm@v4
         with:
           version: ${{ env.HELM_VERSION }}
       - uses: sigstore/cosign-installer@v3
-      - name: Package, push and sign chart (GHCR OCI)
+      - name: Package, push and sign chart (GHCR OCI) + attach to release
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
           OWNER="${GITHUB_REPOSITORY_OWNER,,}"
-          helm package charts/arvancloud-webhook \
-            --version "$VERSION" --app-version "$VERSION"
+          helm package charts/arvancloud-webhook --version "$VERSION" --app-version "$VERSION"
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
-          helm push "arvancloud-webhook-${VERSION}.tgz" \
-            "oci://ghcr.io/${OWNER}/charts" 2> push.log
+          helm push "arvancloud-webhook-${VERSION}.tgz" "oci://ghcr.io/${OWNER}/charts" 2> push.log
           cat push.log
           DIGEST="$(awk '/[Dd]igest: /{print $NF}' push.log)"
           cosign sign --yes "ghcr.io/${OWNER}/charts/arvancloud-webhook@${DIGEST}"
-
-  github-release:
-    runs-on: ubuntu-latest
-    needs: [image, chart]
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
+          gh release upload "$TAG" "arvancloud-webhook-${VERSION}.tgz" --clobber

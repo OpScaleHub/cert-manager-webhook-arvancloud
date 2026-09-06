@@ -190,14 +190,37 @@ main.go              apiserver entrypoint + metrics server
 charts/              Helm chart with values.schema.json + ServiceMonitor
 deploy/bundle.yaml   chart rendered with defaults, for GitOps
 docs/index.html      GitHub Pages landing page (dark-mode, zero-JS-framework)
-.github/workflows/   ci.yml, release.yml (signed image + OCI chart), pages.yml,
-                     compat.yml (cert-manager version matrix + conformance)
+.github/workflows/   ci.yml, release.yml (release-please + signed image/chart),
+                     pages.yml, compat.yml (cert-manager matrix + conformance)
 ```
 
-> Release note: the multi-arch pipeline uses `docker buildx` rather than
-> GoReleaser; both produce `linux/amd64` + `linux/arm64` artifacts. Images and
-> the OCI chart are signed keylessly with [cosign](https://docs.sigstore.dev/)
-> and ship an SBOM + build provenance attestation.
+## Releasing
+
+Releases are driven by [release-please](https://github.com/googleapis/release-please)
+from Conventional Commit messages — no manual tagging.
+
+1. Merge PRs to `main` with `feat:` / `fix:` / `feat!:` commit subjects.
+2. `release.yml` keeps a **release PR** open ("chore: release X.Y.Z") that
+   updates `CHANGELOG.md` and bumps the version in `Chart.yaml` and
+   `docs/index.html`.
+3. **Merge the release PR** → the git tag `vX.Y.Z` and the GitHub Release are
+   created, then the same workflow:
+   - builds & pushes the multi-arch image (`docker buildx`, `linux/amd64` +
+     `linux/arm64`) tagged `X.Y.Z`, `X.Y`, `X`, `latest`;
+   - packages & pushes the chart to `oci://ghcr.io/opscalehub/charts` and
+     attaches the `.tgz` to the release;
+   - cosign **keyless-signs** the image and the chart, with an SBOM +
+     build-provenance attestation.
+4. `pages.yml` republishes the Helm repo index so `helm repo add` sees the new
+   version.
+
+The first tagged release is pinned to `1.0.0` via `release-as` in
+`release-please-config.json`; remove that line after `v1.0.0` ships so
+subsequent versions auto-increment.
+
+> GHCR packages are private on first publish — set the image and chart
+> packages to **Public** once (Package settings → Change visibility). They
+> auto-link to this repo via `org.opencontainers.image.source`.
 
 ## License
 
