@@ -31,6 +31,20 @@ const (
 	cdnAPIVersion = "cdn/4.0"
 )
 
+// sharedTransport is a process-wide, connection-pooled transport. Every
+// Client reuses it (unless one is injected via WithHTTPClient) so that
+// high-density clusters issuing many concurrent challenges do not each open
+// their own connection pool and exhaust ephemeral ports.
+var sharedTransport = &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	ForceAttemptHTTP2:     true,
+	MaxIdleConns:          100,
+	MaxIdleConnsPerHost:   10,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+}
+
 // ErrRecordNotFound is returned by DeleteRecord when the target record no
 // longer exists. Callers treating deletion as idempotent should ignore it.
 var ErrRecordNotFound = errors.New("arvancloud: dns record not found")
@@ -72,7 +86,7 @@ func New(apiKey string, opts ...Option) (*Client, error) {
 	c := &Client{
 		apiKey:     strings.TrimSpace(apiKey),
 		baseURL:    DefaultBaseURL,
-		httpClient: &http.Client{Timeout: DefaultTimeout},
+		httpClient: &http.Client{Timeout: DefaultTimeout, Transport: sharedTransport},
 	}
 	for _, o := range opts {
 		o(c)

@@ -1,0 +1,14 @@
+{
+  "name": "cert-manager-webhook-arvancloud",
+  "short_name": "arvancloud-webhook",
+  "description": "cert-manager ACME DNS-01 webhook solver for ArvanCloud",
+  "start_url": "/cert-manager-webhook-arvancloud/",
+  "display": "browser",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "icons": [
+    { "src": "favicon.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
