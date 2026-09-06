@@ -127,6 +127,29 @@ func TestNewRejectsEmptyKey(t *testing.T) {
 	if _, err := New("  "); err == nil {
 		t.Fatal("expected error for empty key")
 	}
+	if _, err := New("Apikey "); err == nil {
+		t.Fatal("expected error when only the Apikey prefix is given")
+	}
+}
+
+func TestNewNormalisesApikeyPrefix(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("Authorization")
+		_ = json.NewEncoder(w).Encode(listRecordsResponse{})
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := New("Apikey abc-123", WithBaseURL(srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.FindTXTRecords(context.Background(), "example.com", "x"); err != nil {
+		t.Fatal(err)
+	}
+	if got != "Apikey abc-123" {
+		t.Fatalf("Authorization = %q, want %q", got, "Apikey abc-123")
+	}
 }
 
 func TestNormaliseName(t *testing.T) {

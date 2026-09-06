@@ -8,6 +8,12 @@ It implements the official `webhook.Solver` interface
 (`github.com/cert-manager/cert-manager/pkg/acme/webhook`) and runs as a small
 extension-apiserver alongside cert-manager.
 
+ArvanCloud API reference: <https://www.arvancloud.ir/docs/api/cdn/4.0> ·
+[API usage / getting a key](https://docs.arvancloud.ir/en/developer-tools/api/api-usage) ·
+[DNS records](https://docs.arvancloud.ir/en/cdn/dns-records/adding-records).
+The client (`internal/client`) matches the endpoints and TXT payload shape
+used by `go-acme/lego`'s ArvanCloud provider.
+
 ## Features
 
 - **API v4** against `https://napi.arvancloud.ir`, `Authorization: Apikey <key>`.

@@ -79,14 +79,21 @@ func WithHTTPClient(hc *http.Client) Option {
 	}
 }
 
-// New builds a Client. The apiKey is the ArvanCloud Machine User key, passed
-// verbatim in the "Authorization: Apikey <key>" header.
+// New builds a Client. apiKey is the ArvanCloud Machine User key; it is sent
+// as the "Authorization: Apikey <key>" header. A leading "Apikey " prefix (as
+// used by some other tools) is tolerated and normalised away.
 func New(apiKey string, opts ...Option) (*Client, error) {
-	if strings.TrimSpace(apiKey) == "" {
+	key := strings.TrimSpace(apiKey)
+	if rest, ok := cutPrefixFold(key, "apikey "); ok {
+		key = strings.TrimSpace(rest)
+	} else if strings.EqualFold(key, "apikey") {
+		key = ""
+	}
+	if key == "" {
 		return nil, errors.New("arvancloud: api key must not be empty")
 	}
 	c := &Client{
-		apiKey:     strings.TrimSpace(apiKey),
+		apiKey:     key,
 		baseURL:    DefaultBaseURL,
 		httpClient: &http.Client{Timeout: DefaultTimeout, Transport: sharedTransport},
 	}
@@ -278,6 +285,14 @@ func normaliseName(name, domain string) string {
 		return "@"
 	}
 	return name
+}
+
+// cutPrefixFold is strings.CutPrefix with case-insensitive matching.
+func cutPrefixFold(s, prefix string) (string, bool) {
+	if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
+		return s[len(prefix):], true
+	}
+	return s, false
 }
 
 func apiErrorText(body []byte, status int) string {
