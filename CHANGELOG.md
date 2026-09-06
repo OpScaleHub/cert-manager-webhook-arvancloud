@@ -22,5 +22,3 @@
 
 * automate releases with release-please ([eb99cf6](https://github.com/OpScaleHub/cert-manager-webhook-arvancloud/commit/eb99cf69cbcdc56f43158b47dfe5e03e95e40ec3))
 * fix release-please updaters (yaml jsonpath for Chart.yaml, clean CHANGELOG stub) ([9651d16](https://github.com/OpScaleHub/cert-manager-webhook-arvancloud/commit/9651d160447ca2833d5088c3995f72837f2a386a))
-
-## Changelog
