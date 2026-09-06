@@ -1,0 +1,59 @@
+# Default values for arvancloud-webhook.
+
+# The GroupName must match provider.GroupName in the Go code and the
+# `groupName` set on the ACME Issuer's dns01.webhook config.
+groupName: acme.arvancloud.ir
+
+image:
+  repository: ghcr.io/opscalehub/cert-manager-webhook-arvancloud
+  tag: "" # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+
+# certManager is the release/namespace of the cert-manager install whose
+# ServiceAccount is granted permission to call this webhook's apiserver.
+certManager:
+  namespace: cert-manager
+  serviceAccountName: cert-manager
+
+service:
+  type: ClusterIP
+  port: 443
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  capabilities:
+    drop:
+      - ALL
+
+# Logging verbosity passed to the webhook binary (-v).
+logLevel: 2

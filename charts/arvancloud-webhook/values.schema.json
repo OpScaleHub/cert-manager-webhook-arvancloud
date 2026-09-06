@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "arvancloud-webhook values",
+  "type": "object",
+  "required": ["groupName", "image", "certManager"],
+  "additionalProperties": true,
+  "properties": {
+    "groupName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$"
+    },
+    "replicaCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "logLevel": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10
+    },
+    "image": {
+      "type": "object",
+      "required": ["repository"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "certManager": {
+      "type": "object",
+      "required": ["namespace", "serviceAccountName"],
+      "properties": {
+        "namespace": { "type": "string", "minLength": 1 },
+        "serviceAccountName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    }
+  }
+}

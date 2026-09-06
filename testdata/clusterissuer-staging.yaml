@@ -1,0 +1,40 @@
+# Example: Let's Encrypt staging ClusterIssuer using the ArvanCloud webhook.
+# Apply after `helm install` and after creating the credentials Secret:
+#
+#   kubectl -n cert-manager create secret generic arvancloud-credentials \
+#     --from-literal=api-key=<YOUR_MACHINE_USER_KEY>
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-arvancloud-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: platform@example.com
+    privateKeySecretRef:
+      name: letsencrypt-arvancloud-staging-account
+    solvers:
+      - dns01:
+          webhook:
+            groupName: acme.arvancloud.ir
+            solverName: arvancloud
+            config:
+              apiKeySecretRef:
+                name: arvancloud-credentials
+                key: api-key
+              ttl: 120
+              propagationCheck: true
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: example-com
+  namespace: default
+spec:
+  secretName: example-com-tls
+  issuerRef:
+    name: letsencrypt-arvancloud-staging
+    kind: ClusterIssuer
+  dnsNames:
+    - example.com
+    - "*.apps.example.com"

@@ -1,0 +1,30 @@
+{{ .Chart.Name }} {{ .Chart.AppVersion }} installed into namespace {{ .Release.Namespace }}.
+
+1. Create a Secret with your ArvanCloud Machine User API key:
+
+   kubectl -n {{ .Values.certManager.namespace }} create secret generic arvancloud-credentials \
+     --from-literal=api-key=<YOUR_MACHINE_USER_KEY>
+
+2. Point a ClusterIssuer at this webhook:
+
+   apiVersion: cert-manager.io/v1
+   kind: ClusterIssuer
+   metadata:
+     name: letsencrypt-arvancloud
+   spec:
+     acme:
+       server: https://acme-v02.api.letsencrypt.org/directory
+       email: you@example.com
+       privateKeySecretRef:
+         name: letsencrypt-arvancloud-account
+       solvers:
+         - dns01:
+             webhook:
+               groupName: {{ .Values.groupName }}
+               solverName: arvancloud
+               config:
+                 apiKeySecretRef:
+                   name: arvancloud-credentials
+                   key: api-key
+                 ttl: 120
+                 propagationCheck: true

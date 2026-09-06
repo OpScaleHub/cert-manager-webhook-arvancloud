@@ -1,0 +1,364 @@
+---
+# Source: arvancloud-webhook/templates/rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: arvancloud-webhook
+  namespace: cert-manager
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+---
+# Source: arvancloud-webhook/templates/rbac.yaml
+# Grant the webhook's apiserver permission to create SubjectAccessReviews to
+# authenticate incoming requests, and to read the extension-apiserver auth
+# configmap in kube-system.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: arvancloud-webhook:auth-delegator
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+rules:
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+---
+# Source: arvancloud-webhook/templates/rbac.yaml
+# Permission to read the Secret holding the ArvanCloud API key.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: arvancloud-webhook:secrets-reader
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "watch", "list"]
+---
+# Source: arvancloud-webhook/templates/rbac.yaml
+# Allow the cert-manager ServiceAccount to invoke this webhook's custom API.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: arvancloud-webhook:domain-solver
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+rules:
+  - apiGroups:
+      - acme.arvancloud.ir
+    resources:
+      - "*"
+    verbs:
+      - "create"
+---
+# Source: arvancloud-webhook/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: arvancloud-webhook:auth-delegator
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: arvancloud-webhook:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: arvancloud-webhook
+    namespace: cert-manager
+---
+# Source: arvancloud-webhook/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: arvancloud-webhook:secrets-reader
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: arvancloud-webhook:secrets-reader
+subjects:
+  - kind: ServiceAccount
+    name: arvancloud-webhook
+    namespace: cert-manager
+---
+# Source: arvancloud-webhook/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: arvancloud-webhook:domain-solver
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: arvancloud-webhook:domain-solver
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+---
+# Source: arvancloud-webhook/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: arvancloud-webhook:extension-apiserver-authentication-reader
+  namespace: kube-system
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: arvancloud-webhook
+    namespace: cert-manager
+---
+# Source: arvancloud-webhook/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: arvancloud-webhook
+  namespace: cert-manager
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  type: ClusterIP
+  ports:
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+---
+# Source: arvancloud-webhook/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arvancloud-webhook
+  namespace: cert-manager
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: arvancloud-webhook
+      app.kubernetes.io/instance: arvancloud-webhook
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: arvancloud-webhook
+        app.kubernetes.io/instance: arvancloud-webhook
+    spec:
+      serviceAccountName: arvancloud-webhook
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: webhook
+          image: "ghcr.io/opscalehub/cert-manager-webhook-arvancloud:0.1.0"
+          imagePullPolicy: IfNotPresent
+          args:
+            - --tls-cert-file=/tls/tls.crt
+            - --tls-private-key-file=/tls/tls.key
+            - --secure-port=8443
+            - -v=2
+          env:
+            - name: GROUP_NAME
+              value: "acme.arvancloud.ir"
+          ports:
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /healthz
+              port: https
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /healthz
+              port: https
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+          resources:
+            limits:
+              cpu: 100m
+              memory: 64Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tls
+          secret:
+            secretName: arvancloud-webhook-webhook-tls
+        - name: tmp
+          emptyDir: {}
+---
+# Source: arvancloud-webhook/templates/apiservice.yaml
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.acme.arvancloud.ir
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+  annotations:
+    cert-manager.io/inject-ca-from: "cert-manager/arvancloud-webhook-webhook-tls"
+spec:
+  group: acme.arvancloud.ir
+  groupPriorityMinimum: 1000
+  versionPriority: 15
+  service:
+    name: arvancloud-webhook
+    namespace: cert-manager
+    port: 443
+  version: v1alpha1
+---
+# Source: arvancloud-webhook/templates/pki.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: arvancloud-webhook-ca
+  namespace: cert-manager
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  secretName: arvancloud-webhook-ca
+  duration: 43800h # 5y
+  issuerRef:
+    name: arvancloud-webhook-selfsign
+  commonName: "ca.arvancloud-webhook.cert-manager"
+  isCA: true
+---
+# Source: arvancloud-webhook/templates/pki.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: arvancloud-webhook-webhook-tls
+  namespace: cert-manager
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  secretName: arvancloud-webhook-webhook-tls
+  duration: 8760h # 1y
+  issuerRef:
+    name: arvancloud-webhook-ca
+  dnsNames:
+    - arvancloud-webhook
+    - arvancloud-webhook.cert-manager
+    - arvancloud-webhook.cert-manager.svc
+---
+# Source: arvancloud-webhook/templates/pki.yaml
+# PKI for the webhook apiserver's serving certificate, issued by cert-manager
+# itself via a bootstrap self-signed issuer.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: arvancloud-webhook-selfsign
+  namespace: cert-manager
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  selfSigned: {}
+---
+# Source: arvancloud-webhook/templates/pki.yaml
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: arvancloud-webhook-ca
+  namespace: cert-manager
+  labels:
+    helm.sh/chart: arvancloud-webhook-0.1.0
+    app.kubernetes.io/name: arvancloud-webhook
+    app.kubernetes.io/instance: arvancloud-webhook
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  ca:
+    secretName: arvancloud-webhook-ca

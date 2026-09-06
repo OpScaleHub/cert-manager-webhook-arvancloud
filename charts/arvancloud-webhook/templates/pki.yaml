@@ -1,0 +1,54 @@
+# PKI for the webhook apiserver's serving certificate, issued by cert-manager
+# itself via a bootstrap self-signed issuer.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "arvancloud-webhook.selfSignedIssuer" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "arvancloud-webhook.rootCACertificate" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "arvancloud-webhook.rootCACertificate" . }}
+  duration: 43800h # 5y
+  issuerRef:
+    name: {{ include "arvancloud-webhook.selfSignedIssuer" . }}
+  commonName: "ca.arvancloud-webhook.cert-manager"
+  isCA: true
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "arvancloud-webhook.rootCAIssuer" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ include "arvancloud-webhook.rootCACertificate" . }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "arvancloud-webhook.servingCertificate" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "arvancloud-webhook.servingCertificate" . }}
+  duration: 8760h # 1y
+  issuerRef:
+    name: {{ include "arvancloud-webhook.rootCAIssuer" . }}
+  dnsNames:
+    - {{ include "arvancloud-webhook.fullname" . }}
+    - {{ include "arvancloud-webhook.fullname" . }}.{{ .Release.Namespace }}
+    - {{ include "arvancloud-webhook.fullname" . }}.{{ .Release.Namespace }}.svc

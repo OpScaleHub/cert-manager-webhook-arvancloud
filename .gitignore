@@ -1,0 +1,10 @@
+/webhook
+/bin/
+/dist/
+*.tgz
+coverage.out
+coverage.html
+.idea/
+.vscode/
+*.tmp
+_out/

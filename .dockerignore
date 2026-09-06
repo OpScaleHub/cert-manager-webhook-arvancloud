@@ -1,0 +1,11 @@
+.git
+.github
+charts
+deploy
+docs
+*.md
+!go.mod
+!go.sum
+bin
+dist
+coverage.out

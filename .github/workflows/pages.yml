@@ -1,0 +1,58 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "charts/**"
+      - ".github/workflows/pages.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+
+      - name: Assemble site (landing page + Helm repo)
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp -r docs/. _site/
+
+          # Package the chart and (re)build a merged repo index so
+          # `helm repo add opscalehub https://opscalehub.github.io/...` works.
+          BASE_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          helm package charts/arvancloud-webhook --destination _site
+          if curl -sfL "$BASE_URL/index.yaml" -o old-index.yaml; then
+            helm repo index _site --url "$BASE_URL" --merge old-index.yaml
+          else
+            helm repo index _site --url "$BASE_URL"
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "arvancloud-webhook.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+{{- with .Values.imagePullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+---
+# Grant the webhook's apiserver permission to create SubjectAccessReviews to
+# authenticate incoming requests, and to read the extension-apiserver auth
+# configmap in kube-system.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "arvancloud-webhook.fullname" . }}:auth-delegator
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "arvancloud-webhook.fullname" . }}:auth-delegator
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "arvancloud-webhook.fullname" . }}:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "arvancloud-webhook.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "arvancloud-webhook.fullname" . }}:extension-apiserver-authentication-reader
+  namespace: kube-system
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "arvancloud-webhook.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# Permission to read the Secret holding the ArvanCloud API key.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "arvancloud-webhook.fullname" . }}:secrets-reader
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "arvancloud-webhook.fullname" . }}:secrets-reader
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "arvancloud-webhook.fullname" . }}:secrets-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "arvancloud-webhook.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# Allow the cert-manager ServiceAccount to invoke this webhook's custom API.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "arvancloud-webhook.fullname" . }}:domain-solver
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - {{ .Values.groupName }}
+    resources:
+      - "*"
+    verbs:
+      - "create"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "arvancloud-webhook.fullname" . }}:domain-solver
+  labels:
+    {{- include "arvancloud-webhook.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "arvancloud-webhook.fullname" . }}:domain-solver
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.certManager.serviceAccountName }}
+    namespace: {{ .Values.certManager.namespace }}
