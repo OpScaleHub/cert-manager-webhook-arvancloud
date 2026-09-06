@@ -152,15 +152,29 @@ helm lint charts/arvancloud-webhook
 docker build -t webhook:dev .
 ```
 
-**Conformance suite** — cert-manager's official external-webhook tests against
-the live ArvanCloud API. Excluded from `go test ./...` by the `conformance`
-build tag; needs envtest binaries plus `ARVANCLOUD_API_KEY` and `TEST_ZONE_NAME`:
+**Conformance suite** — cert-manager's official external-webhook tests
+(`test/acme`) driven against the live ArvanCloud API: spins up a local envtest
+control plane and calls `Present`/`CleanUp` with a synthetic challenge on a
+real zone (no ACME order, no Let's Encrypt rate limits). Excluded from
+`go test ./...` by the `conformance` build tag. Confirmed passing live against
+`opscale.ir` on 2026-09-06.
 
 ```sh
-export KUBEBUILDER_ASSETS="$(setup-envtest use -p path 1.31.x)"
-ARVANCLOUD_API_KEY=... TEST_ZONE_NAME=example.ir. \
+go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+ASSETS="$(setup-envtest use 1.31.0 -p path)"
+export TEST_ASSET_ETCD="$ASSETS/etcd" \
+       TEST_ASSET_KUBE_APISERVER="$ASSETS/kube-apiserver" \
+       TEST_ASSET_KUBECTL="$ASSETS/kubectl"
+
+ARVANCLOUD_API_KEY=... TEST_ZONE_NAME=opscale.ir. \
   go test -tags conformance -run TestConformance ./internal/provider/ -v -timeout 20m
 ```
+
+> **Gotcha:** an ArvanCloud Machine User's **DNS-records permission is not
+> granted by default**. A key that is otherwise valid but lacks that scope
+> returns `HTTP 403: Your access to this section is restricted.` from *every*
+> DNS call — not a clear permission-denied message. Grant the DNS-records
+> policy to the Machine User for the target zone in the ArvanCloud console.
 
 The `compat` workflow builds + unit-tests against a matrix of cert-manager
 minor versions weekly to catch upstream API-schema breaks early, and runs the

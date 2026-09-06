@@ -59,6 +59,9 @@ jobs:
             echo "::notice::ARVANCLOUD_API_KEY / TEST_ZONE_NAME not configured — skipping live conformance run"
             exit 0
           fi
-          KUBEBUILDER_ASSETS="$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.19 use -p path 1.31.x)"
-          export KUBEBUILDER_ASSETS
+          ASSETS="$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.19 use 1.31.0 -p path)"
+          export KUBEBUILDER_ASSETS="$ASSETS"
+          export TEST_ASSET_ETCD="$ASSETS/etcd"
+          export TEST_ASSET_KUBE_APISERVER="$ASSETS/kube-apiserver"
+          export TEST_ASSET_KUBECTL="$ASSETS/kubectl"
           go test -tags conformance -run TestConformance ./internal/provider/ -v -timeout 20m
