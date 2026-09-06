@@ -11,21 +11,30 @@ import (
 	"github.com/miekg/dns"
 )
 
-// startStubDNS runs a UDP DNS server on 127.0.0.1 that answers TXT queries
-// with wantValue, and records every qname it was asked for.
-func startStubDNS(t *testing.T, wantValue string) (addr string, queries *[]string) {
+// stubDNS is a UDP DNS server on 127.0.0.1 that answers TXT queries with
+// wantValue and records every qname it is asked for.
+type stubDNS struct {
+	addr string
+	mu   sync.Mutex
+	seen []string
+}
+
+func (s *stubDNS) queries() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.seen...)
+}
+
+func startStubDNS(t *testing.T, wantValue string) *stubDNS {
 	t.Helper()
-	var (
-		mu   sync.Mutex
-		seen []string
-	)
+	s := &stubDNS{}
 	h := dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
 		m.SetReply(r)
 		for _, q := range r.Question {
-			mu.Lock()
-			seen = append(seen, q.Name)
-			mu.Unlock()
+			s.mu.Lock()
+			s.seen = append(s.seen, q.Name)
+			s.mu.Unlock()
 			if q.Qtype == dns.TypeTXT && strings.HasPrefix(q.Name, "_acme-challenge.") {
 				rr, _ := dns.NewRR(q.Name + " 60 IN TXT \"" + wantValue + "\"")
 				m.Answer = append(m.Answer, rr)
@@ -38,42 +47,45 @@ func startStubDNS(t *testing.T, wantValue string) (addr string, queries *[]strin
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
+	s.addr = pc.LocalAddr().String()
 	srv := &dns.Server{PacketConn: pc, Handler: h}
+	started := make(chan struct{})
+	srv.NotifyStartedFunc = func() { close(started) }
 	go func() { _ = srv.ActivateAndServe() }()
+	<-started
 	t.Cleanup(func() { _ = srv.Shutdown() })
-
-	return pc.LocalAddr().String(), &seen
+	return s
 }
 
 func TestWaitForPropagationUsesAbsoluteName(t *testing.T) {
 	const val = "tok-abc"
-	addr, seen := startStubDNS(t, val)
+	stub := startStubDNS(t, val)
 
 	orig := publicResolvers
-	publicResolvers = []string{addr}
+	publicResolvers = []string{stub.addr}
 	t.Cleanup(func() { publicResolvers = orig })
 
 	// Caller passes the FQDN without a trailing dot; the check must still
 	// query it as an absolute name (no resolv.conf search list appended).
-	err := waitForPropagation(context.Background(), "_acme-challenge.www.example.com", val, 5)
-	if err != nil {
+	if err := waitForPropagation(context.Background(), "_acme-challenge.www.example.com", val, 5); err != nil {
 		t.Fatalf("waitForPropagation: %v", err)
 	}
 
-	for _, q := range *seen {
-		if q != "_acme-challenge.www.example.com." {
-			t.Fatalf("unexpected query %q — search list was applied", q)
-		}
-	}
-	if len(*seen) == 0 {
+	got := stub.queries()
+	if len(got) == 0 {
 		t.Fatal("stub DNS received no queries")
+	}
+	for _, q := range got {
+		if q != "_acme-challenge.www.example.com." {
+			t.Fatalf("unexpected query %q — resolv.conf search list was applied", q)
+		}
 	}
 }
 
 func TestWaitForPropagationTimesOut(t *testing.T) {
-	addr, _ := startStubDNS(t, "different-value")
+	stub := startStubDNS(t, "different-value")
 	orig := publicResolvers
-	publicResolvers = []string{addr}
+	publicResolvers = []string{stub.addr}
 	t.Cleanup(func() { publicResolvers = orig })
 
 	start := time.Now()
@@ -81,7 +93,7 @@ func TestWaitForPropagationTimesOut(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}
-	if time.Since(start) > 5*time.Second {
-		t.Fatalf("timeout took too long: %s", time.Since(start))
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("timeout took too long: %s", elapsed)
 	}
 }
