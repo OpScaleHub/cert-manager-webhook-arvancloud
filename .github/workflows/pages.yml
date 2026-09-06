@@ -24,8 +24,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.4
 
       - name: Assemble site (landing page + Helm repo)
         run: |

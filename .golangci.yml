@@ -1,49 +1,62 @@
+version: "2"
 run:
-  timeout: 5m
   build-tags:
     - conformance
-
 linters:
   enable:
     - asciicheck
     - bodyclose
     - contextcheck
     - copyloopvar
-    - errcheck
     - errorlint
     - gocritic
     - gocyclo
-    - goimports
     - gosec
-    - govet
-    - ineffassign
     - misspell
     - nakedret
     - nilerr
     - noctx
     - revive
-    - staticcheck
     - unconvert
     - unparam
-    - unused
     - whitespace
-
-linters-settings:
-  gocyclo:
-    min-complexity: 20
-  goimports:
-    local-prefixes: github.com/OpScaleHub/cert-manager-webhook-arvancloud
-  revive:
+  settings:
+    gocyclo:
+      min-complexity: 20
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: exported
-        disabled: false
-
+      - linters:
+          - gosec
+          - noctx
+          - unparam
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
-        - noctx
-        - unparam
   max-issues-per-linter: 0
   max-same-issues: 0
+formatters:
+  enable:
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/OpScaleHub/cert-manager-webhook-arvancloud
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

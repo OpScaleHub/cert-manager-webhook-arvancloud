@@ -2,7 +2,9 @@
 
 `bundle.yaml` is the Helm chart rendered with default values into the
 `cert-manager` namespace, for GitOps tools (Argo CD, Flux) that consume plain
-manifests. Regenerate after chart changes:
+manifests. Regenerate after chart changes (CI checks it is current, tolerating
+only cosmetic blank-line differences between Helm patch releases — CI pins
+Helm `v3.18.4`):
 
 ```sh
 helm template arvancloud-webhook charts/arvancloud-webhook \

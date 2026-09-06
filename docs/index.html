@@ -341,7 +341,7 @@ kubectl -n cert-manager create secret generic arvancloud-credentials \
             <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0 1 3.5v5C1 12.5 4.13 15.5 8 16c3.87-.5 7-3.5 7-7.5v-5L8 0Zm0 1.68 5.5 2.75v4.07c0 3.02-2.3 5.44-5.5 5.94-3.2-.5-5.5-2.92-5.5-5.94V4.43L8 1.68Z"/><path d="M7.25 5.5h1.5v2h2v1.5h-2v2h-1.5v-2h-2V7.5h2v-2Z"/></svg>
           </div>
           <h3>Multi-Architecture Builds</h3>
-          <p>First-class images for both <code>linux/amd64</code> and <code>linux/arm64</code> edge worker nodes, published with SBOM and build provenance on every tagged release.</p>
+          <p>First-class images for both <code>linux/amd64</code> and <code>linux/arm64</code> edge worker nodes — cosign keyless-signed, with an SBOM and build-provenance attestation on every tagged release.</p>
         </article>
 
         <article class="card">
@@ -396,8 +396,9 @@ kubectl -n cert-manager create secret generic arvancloud-credentials \
           <ul class="checks">
             <li><strong>Idempotent lifecycle.</strong> <code>Present</code> reuses an identical existing TXT record; <code>CleanUp</code> treats a missing record as success — no error loops.</li>
             <li><strong>Multi-level subdomains.</strong> Correctly resolves the zone apex for names like <code>*.apps.cluster.example.com</code>.</li>
-            <li><strong>Propagation gate.</strong> Optionally blocks until <code>1.1.1.1</code> and <code>8.8.8.8</code> both serve the challenge record.</li>
+            <li><strong>Propagation gate.</strong> Blocks by default until <code>1.1.1.1</code> and <code>8.8.8.8</code> both serve the challenge record; set <code>propagationCheck: false</code> to opt out.</li>
             <li><strong>Locked-down pod.</strong> Runs as non-root <code>10001</code>, read-only root filesystem, all capabilities dropped, <code>RuntimeDefault</code> seccomp.</li>
+            <li><strong>Prometheus metrics.</strong> API latency &amp; error-rate histograms and challenge success/failure counters on <code>:8081/metrics</code>, with an optional <code>ServiceMonitor</code>.</li>
             <li><strong>Schema-validated chart.</strong> <code>values.schema.json</code> catches missing secret bindings and invalid replica counts at <code>helm install</code> time.</li>
           </ul>
         </div>
