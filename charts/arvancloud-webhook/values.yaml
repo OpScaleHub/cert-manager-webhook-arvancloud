@@ -25,6 +25,17 @@ service:
   type: ClusterIP
   port: 443
 
+# Prometheus metrics + /healthz on a separate diagnostic port.
+metrics:
+  enabled: true
+  port: 8081
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    # Extra labels for the ServiceMonitor (e.g. release: kube-prometheus-stack).
+    labels: {}
+
 resources:
   requests:
     cpu: 10m

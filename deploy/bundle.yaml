@@ -171,6 +171,10 @@ spec:
       port: 443
       targetPort: https
       protocol: TCP
+    - name: metrics
+      port: 8081
+      targetPort: metrics
+      protocol: TCP
   selector:
     app.kubernetes.io/name: arvancloud-webhook
     app.kubernetes.io/instance: arvancloud-webhook
@@ -219,9 +223,14 @@ spec:
           env:
             - name: GROUP_NAME
               value: "acme.arvancloud.ir"
+            - name: METRICS_BIND_ADDRESS
+              value: ":8081"
           ports:
             - name: https
               containerPort: 8443
+              protocol: TCP
+            - name: metrics
+              containerPort: 8081
               protocol: TCP
           livenessProbe:
             httpGet:

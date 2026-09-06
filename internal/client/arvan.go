@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/OpScaleHub/cert-manager-webhook-arvancloud/internal/obs"
 )
 
 // DefaultBaseURL is the ArvanCloud API v4 base endpoint.
@@ -201,11 +203,14 @@ func (c *Client) do(ctx context.Context, method, path string, reqBody, out any) 
 			req.Header.Set("Content-Type", "application/json")
 		}
 
+		attemptStart := time.Now()
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
+			obs.ObserveAPIRequest(method, 0, err, attemptStart)
 			lastErr = fmt.Errorf("arvancloud: %s %s: %w", method, path, err)
 			continue // network error: retry
 		}
+		obs.ObserveAPIRequest(method, resp.StatusCode, nil, attemptStart)
 
 		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		_ = resp.Body.Close()

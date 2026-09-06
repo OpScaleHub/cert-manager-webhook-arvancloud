@@ -68,9 +68,12 @@ func testSecret() *corev1.Secret {
 	}
 }
 
+func boolPtr(b bool) *bool { return &b }
+
 func challenge(fqdn, zone, key string) *whapi.ChallengeRequest {
 	cfg, _ := json.Marshal(arvanDNSProviderConfig{
-		APIKeySecretRef: secretRef("arvan-credentials", "api-key"),
+		APIKeySecretRef:  secretRef("arvan-credentials", "api-key"),
+		PropagationCheck: boolPtr(false),
 	})
 	return &whapi.ChallengeRequest{
 		ResolvedFQDN:      fqdn,
@@ -140,6 +143,15 @@ func TestPresentMissingSecret(t *testing.T) {
 func TestLoadConfigRejectsNil(t *testing.T) {
 	if _, err := loadConfig(nil); err == nil {
 		t.Fatal("expected error for nil config")
+	}
+}
+
+func TestPropagationCheckDefaultsOn(t *testing.T) {
+	if !(arvanDNSProviderConfig{}).propagationCheckEnabled() {
+		t.Fatal("propagation check should default to enabled")
+	}
+	if (arvanDNSProviderConfig{PropagationCheck: boolPtr(false)}).propagationCheckEnabled() {
+		t.Fatal("explicit false should disable propagation check")
 	}
 }
 

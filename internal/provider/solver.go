@@ -19,6 +19,7 @@ import (
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 
 	"github.com/OpScaleHub/cert-manager-webhook-arvancloud/internal/client"
+	"github.com/OpScaleHub/cert-manager-webhook-arvancloud/internal/obs"
 )
 
 // GroupName is the API group the webhook registers under. It must match the
@@ -48,9 +49,19 @@ type arvanDNSProviderConfig struct {
 	APIURL string `json:"apiUrl,omitempty"`
 	// TTL for the challenge TXT record, in seconds. Defaults to 120.
 	TTL int `json:"ttl,omitempty"`
-	// PropagationCheck, when true, blocks Present until the record is
-	// visible on public resolvers (1.1.1.1, 8.8.8.8). Optional.
-	PropagationCheck bool `json:"propagationCheck,omitempty"`
+	// PropagationCheck controls whether Present blocks until the record is
+	// visible on public resolvers (1.1.1.1, 8.8.8.8). Defaults to true;
+	// set to false to return as soon as the ArvanCloud API accepts the
+	// record and rely on cert-manager's own DNS self-check instead.
+	PropagationCheck *bool `json:"propagationCheck,omitempty"`
+	// PropagationTimeoutSeconds bounds the propagation wait. Defaults to 60.
+	// Keep it below the Kubernetes apiserver request timeout (60s) unless
+	// you have raised --request-timeout for the webhook.
+	PropagationTimeoutSeconds int `json:"propagationTimeoutSeconds,omitempty"`
+}
+
+func (c arvanDNSProviderConfig) propagationCheckEnabled() bool {
+	return c.PropagationCheck == nil || *c.PropagationCheck
 }
 
 // Solver returns a cert-manager webhook.Solver backed by ArvanCloud DNS.
@@ -80,7 +91,8 @@ func (s *arvanDNSProviderSolver) Initialize(kubeCfg *rest.Config, _ <-chan struc
 	return nil
 }
 
-func (s *arvanDNSProviderSolver) Present(ch *whapi.ChallengeRequest) error {
+func (s *arvanDNSProviderSolver) Present(ch *whapi.ChallengeRequest) (err error) {
+	defer func() { obs.ObserveChallenge("present", err) }()
 	ctx := context.Background()
 
 	cfg, err := loadConfig(ch.Config)
@@ -98,12 +110,12 @@ func (s *arvanDNSProviderSolver) Present(ch *whapi.ChallengeRequest) error {
 		ttl = defaultTTL
 	}
 
-	if _, err := api.CreateTXTRecord(ctx, domain, name, ch.Key, ttl); err != nil {
+	if _, err = api.CreateTXTRecord(ctx, domain, name, ch.Key, ttl); err != nil {
 		return fmt.Errorf("presenting challenge for %q: %w", ch.ResolvedFQDN, err)
 	}
 
-	if cfg.PropagationCheck {
-		if err := waitForPropagation(ctx, ch.ResolvedFQDN, ch.Key); err != nil {
+	if cfg.propagationCheckEnabled() {
+		if err = waitForPropagation(ctx, ch.ResolvedFQDN, ch.Key, cfg.PropagationTimeoutSeconds); err != nil {
 			return err
 		}
 	}
@@ -112,7 +124,8 @@ func (s *arvanDNSProviderSolver) Present(ch *whapi.ChallengeRequest) error {
 
 // CleanUp removes the challenge record. It is idempotent: a missing record is
 // treated as success.
-func (s *arvanDNSProviderSolver) CleanUp(ch *whapi.ChallengeRequest) error {
+func (s *arvanDNSProviderSolver) CleanUp(ch *whapi.ChallengeRequest) (err error) {
+	defer func() { obs.ObserveChallenge("cleanup", err) }()
 	ctx := context.Background()
 
 	cfg, err := loadConfig(ch.Config)

@@ -25,6 +25,8 @@ jobs:
         run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
       - name: Coverage summary
         run: go tool cover -func=coverage.out | tail -1
+      - name: Vet (incl. conformance build tag)
+        run: go vet -tags conformance ./...
 
   lint:
     runs-on: ubuntu-latest
@@ -37,7 +39,7 @@ jobs:
       - uses: golangci/golangci-lint-action@v6
         with:
           version: v1.62.2
-          args: --timeout=5m
+          args: --timeout=5m --build-tags=conformance
 
   helm:
     runs-on: ubuntu-latest

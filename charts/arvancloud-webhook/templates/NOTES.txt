@@ -27,4 +27,9 @@
                    name: arvancloud-credentials
                    key: api-key
                  ttl: 120
-                 propagationCheck: true
+                 # propagationCheck defaults to true; set false to skip the
+                 # public-resolver wait and rely on cert-manager's self-check.
+
+{{ if .Values.metrics.enabled -}}
+Metrics: http://{{ include "arvancloud-webhook.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.metrics.port }}/metrics
+{{ end -}}

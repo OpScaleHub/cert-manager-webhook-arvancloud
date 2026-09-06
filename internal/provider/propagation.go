@@ -14,14 +14,19 @@ import (
 var publicResolvers = []string{"1.1.1.1:53", "8.8.8.8:53"}
 
 const (
-	propagationTimeout  = 2 * time.Minute
-	propagationInterval = 5 * time.Second
+	defaultPropagationTimeout = 60 * time.Second
+	propagationInterval       = 5 * time.Second
 )
 
 // waitForPropagation polls the public resolvers until every one of them
-// returns the expected TXT value for fqdn, or the context/timeout expires.
-func waitForPropagation(ctx context.Context, fqdn, expected string) error {
-	ctx, cancel := context.WithTimeout(ctx, propagationTimeout)
+// returns the expected TXT value for fqdn, or the timeout expires.
+// timeoutSeconds <= 0 selects defaultPropagationTimeout.
+func waitForPropagation(ctx context.Context, fqdn, expected string, timeoutSeconds int) error {
+	timeout := defaultPropagationTimeout
+	if timeoutSeconds > 0 {
+		timeout = time.Duration(timeoutSeconds) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	fqdn = strings.TrimSuffix(fqdn, ".")

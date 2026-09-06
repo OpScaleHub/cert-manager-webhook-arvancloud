@@ -30,7 +30,8 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-      - uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -42,21 +43,42 @@ jobs:
           provenance: true
           sbom: true
 
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign image (keyless / Sigstore)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes "ghcr.io/${{ github.repository }}@${DIGEST}"
+          cosign download sbom "ghcr.io/${{ github.repository }}@${DIGEST}" > sbom.spdx.json || true
+      - name: Attest SBOM
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          if [ -s sbom.spdx.json ]; then
+            cosign attest --yes --predicate sbom.spdx.json --type spdxjson \
+              "ghcr.io/${{ github.repository }}@${DIGEST}"
+          fi
+
   chart:
     runs-on: ubuntu-latest
     needs: image
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
-      - name: Package and push chart to GHCR (OCI)
+      - uses: sigstore/cosign-installer@v3
+      - name: Package, push and sign chart (GHCR OCI)
         run: |
+          set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
           helm package charts/arvancloud-webhook \
             --version "$VERSION" --app-version "$VERSION"
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
           helm push "arvancloud-webhook-${VERSION}.tgz" \
-            "oci://ghcr.io/${{ github.repository_owner }}/charts"
+            "oci://ghcr.io/${{ github.repository_owner }}/charts" 2> push.log
+          DIGEST="$(awk '/Digest: /{print $2}' push.log)"
+          cosign sign --yes \
+            "ghcr.io/${{ github.repository_owner }}/charts/arvancloud-webhook@${DIGEST}"
 
   github-release:
     runs-on: ubuntu-latest

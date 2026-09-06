@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -75,7 +76,7 @@ func TestDeleteRecordNotFound(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	if err := c.DeleteRecord(context.Background(), "example.com", "rec-1"); err != ErrRecordNotFound {
+	if err := c.DeleteRecord(context.Background(), "example.com", "rec-1"); !errors.Is(err, ErrRecordNotFound) {
 		t.Fatalf("err = %v, want ErrRecordNotFound", err)
 	}
 }

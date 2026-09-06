@@ -1,0 +1,64 @@
+name: compat
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "go.mod"
+      - "go.sum"
+      - "internal/**"
+      - "main.go"
+      - ".github/workflows/compat.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cert-manager-matrix:
+    name: cert-manager ${{ matrix.cert-manager }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cert-manager: ["v1.14.7", "v1.15.5", "v1.16.2"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: Build & unit-test against cert-manager ${{ matrix.cert-manager }}
+        run: |
+          set -euo pipefail
+          go get github.com/cert-manager/cert-manager@${{ matrix.cert-manager }}
+          go mod tidy
+          go build ./...
+          go test ./...
+          go vet -tags conformance ./...
+
+  conformance:
+    name: conformance suite (live ArvanCloud)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: Run cert-manager conformance suite
+        env:
+          ARVANCLOUD_API_KEY: ${{ secrets.ARVANCLOUD_API_KEY }}
+          TEST_ZONE_NAME: ${{ vars.TEST_ZONE_NAME }}
+          TEST_DNS_SERVER: ${{ vars.TEST_DNS_SERVER }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ARVANCLOUD_API_KEY}" ] || [ -z "${TEST_ZONE_NAME}" ]; then
+            echo "::notice::ARVANCLOUD_API_KEY / TEST_ZONE_NAME not configured — skipping live conformance run"
+            exit 0
+          fi
+          KUBEBUILDER_ASSETS="$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.19 use -p path 1.31.x)"
+          export KUBEBUILDER_ASSETS
+          go test -tags conformance -run TestConformance ./internal/provider/ -v -timeout 20m

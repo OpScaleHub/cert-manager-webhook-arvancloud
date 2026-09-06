@@ -12,5 +12,11 @@ spec:
       port: {{ .Values.service.port }}
       targetPort: https
       protocol: TCP
+    {{- if .Values.metrics.enabled }}
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
   selector:
     {{- include "arvancloud-webhook.selectorLabels" . | nindent 4 }}

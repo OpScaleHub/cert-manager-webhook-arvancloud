@@ -34,10 +34,17 @@ spec:
           env:
             - name: GROUP_NAME
               value: {{ .Values.groupName | quote }}
+            - name: METRICS_BIND_ADDRESS
+              value: {{ if .Values.metrics.enabled }}{{ printf ":%d" (int .Values.metrics.port) | quote }}{{ else }}""{{ end }}
           ports:
             - name: https
               containerPort: 8443
               protocol: TCP
+            {{- if .Values.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+            {{- end }}
           livenessProbe:
             httpGet:
               scheme: HTTPS

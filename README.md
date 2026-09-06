@@ -16,12 +16,16 @@ extension-apiserver alongside cert-manager.
 - **Hard 15s timeout** and bounded retries on every API call, so a slow
   ArvanCloud response never stalls a cert-manager queue worker.
 - **Multi-level subdomain** handling (`_acme-challenge.apps.cluster.example.com`).
-- Optional **public-resolver propagation check** (1.1.1.1 / 8.8.8.8) before
-  `Present` returns.
+- **Public-resolver propagation check** (1.1.1.1 / 8.8.8.8) before `Present`
+  returns — on by default, opt-out.
+- **Pooled HTTP transport** shared process-wide (tuned keep-alives / idle conns).
+- **Prometheus metrics** (`/metrics` on `:8081`): API latency histograms, error
+  rates, challenge success/failure counters; optional `ServiceMonitor`.
 - Credentials read **only** from a namespaced Kubernetes `Secret`; never logged.
 - Restricted pod security context: non-root `10001`, read-only root FS, all
   capabilities dropped, `RuntimeDefault` seccomp.
-- Multi-arch image (`linux/amd64`, `linux/arm64`), distroless base.
+- Multi-arch image (`linux/amd64`, `linux/arm64`), distroless base, **cosign
+  keyless signature** + SBOM + provenance on every release.
 
 ## Install (Helm)
 
@@ -58,15 +62,25 @@ Key values (`charts/arvancloud-webhook/values.yaml`, validated by
 | `image.repository` | `ghcr.io/opscalehub/cert-manager-webhook-arvancloud` | |
 | `certManager.namespace` / `certManager.serviceAccountName` | `cert-manager` | SA granted permission to call the webhook. |
 | `replicaCount` | `1` | 1–10. |
+| `metrics.enabled` / `metrics.port` | `true` / `8081` | Prometheus `/metrics` + `/healthz` on a separate port. |
+| `metrics.serviceMonitor.enabled` | `false` | Create a Prometheus-Operator `ServiceMonitor`. |
 
 ## Credentials
 
-Create an ArvanCloud **Machine User** and API key, then:
+Create a **dedicated ArvanCloud Machine User** — never a master-account key —
+and issue it an API key **scoped to DNS management for only the zones this
+webhook manages**. A compromised webhook Pod has exactly the blast radius of
+this token, so keep it least-privilege and **rotate it on a schedule**: create
+the replacement key, update the Secret, restart the Deployment, then revoke the
+old key in the ArvanCloud console.
 
 ```sh
 kubectl -n cert-manager create secret generic arvancloud-credentials \
   --from-literal=api-key=<YOUR_MACHINE_USER_KEY>
 ```
+
+The key is read from this namespaced Secret at request time only — it is never
+written to logs, ConfigMaps, or Helm values.
 
 ## Example `ClusterIssuer`
 
@@ -104,32 +118,66 @@ A staging example plus a test `Certificate` is in
 | `apiKeySecretRef.name` / `.key` | yes | – | Secret holding the API key, in the Issuer's namespace (or the cluster resource namespace for a `ClusterIssuer`). |
 | `apiUrl` | no | `https://napi.arvancloud.ir` | Override the API base URL. |
 | `ttl` | no | `120` | TXT record TTL, seconds. |
-| `propagationCheck` | no | `false` | Block `Present` until 1.1.1.1 and 8.8.8.8 both serve the record. |
+| `propagationCheck` | no | `true` | Block `Present` until `1.1.1.1` and `8.8.8.8` both serve the record. Set `false` to return as soon as the API accepts the record and rely on cert-manager's own DNS self-check. |
+| `propagationTimeoutSeconds` | no | `60` | Upper bound on the propagation wait. Keep below the apiserver `--request-timeout` (60s). |
+
+## Observability
+
+The webhook exposes Prometheus metrics and `/healthz` on `:8081` (configurable
+via `METRICS_BIND_ADDRESS`; empty disables). Metrics:
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `arvancloud_webhook_api_request_duration_seconds` | histogram | `method`, `outcome` (`2xx`/`4xx`/`5xx`/`error`) |
+| `arvancloud_webhook_api_requests_total` | counter | `method`, `code` |
+| `arvancloud_webhook_solver_challenges_total` | counter | `action` (`present`/`cleanup`), `result` |
+
+Enable scraping with `--set metrics.serviceMonitor.enabled=true` (requires
+Prometheus Operator). Alert on rising `..._api_requests_total{code=~"429|5.."}`
+and `..._challenges_total{result="error"}`.
 
 ## Development
 
 ```sh
-go test ./...           # unit tests (httptest mock API + fake k8s client)
+go test ./...                     # unit tests (httptest mock API + fake k8s client)
+go vet -tags conformance ./...     # keep the conformance suite compiling
 go build ./...
 helm lint charts/arvancloud-webhook
 docker build -t webhook:dev .
 ```
 
+**Conformance suite** — cert-manager's official external-webhook tests against
+the live ArvanCloud API. Excluded from `go test ./...` by the `conformance`
+build tag; needs envtest binaries plus `ARVANCLOUD_API_KEY` and `TEST_ZONE_NAME`:
+
+```sh
+export KUBEBUILDER_ASSETS="$(setup-envtest use -p path 1.31.x)"
+ARVANCLOUD_API_KEY=... TEST_ZONE_NAME=example.ir. \
+  go test -tags conformance -run TestConformance ./internal/provider/ -v -timeout 20m
+```
+
+The `compat` workflow builds + unit-tests against a matrix of cert-manager
+minor versions weekly to catch upstream API-schema breaks early, and runs the
+live conformance suite on demand.
+
 Repository layout:
 
 ```
 internal/client/     ArvanCloud REST client (arvan.go, types.go) + tests
-internal/provider/   webhook.Solver implementation + propagation check + tests
-main.go              apiserver entrypoint
-charts/              Helm chart with values.schema.json
+internal/obs/        Prometheus metrics + diagnostic HTTP server
+internal/provider/   webhook.Solver impl + propagation check + tests + conformance
+main.go              apiserver entrypoint + metrics server
+charts/              Helm chart with values.schema.json + ServiceMonitor
 deploy/bundle.yaml   chart rendered with defaults, for GitOps
 docs/index.html      GitHub Pages landing page (dark-mode, zero-JS-framework)
-.github/workflows/   ci.yml (test/lint/helm/docker), release.yml (image + OCI chart),
-                     pages.yml (landing page + gh-pages Helm repo)
+.github/workflows/   ci.yml, release.yml (signed image + OCI chart), pages.yml,
+                     compat.yml (cert-manager version matrix + conformance)
 ```
 
 > Release note: the multi-arch pipeline uses `docker buildx` rather than
-> GoReleaser; both produce `linux/amd64` + `linux/arm64` artifacts.
+> GoReleaser; both produce `linux/amd64` + `linux/arm64` artifacts. Images and
+> the OCI chart are signed keylessly with [cosign](https://docs.sigstore.dev/)
+> and ship an SBOM + build provenance attestation.
 
 ## License
 

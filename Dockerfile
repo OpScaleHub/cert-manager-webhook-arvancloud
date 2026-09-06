@@ -19,4 +19,5 @@ FROM gcr.io/distroless/static-debian12:nonroot
 LABEL org.opencontainers.image.source="https://github.com/OpScaleHub/cert-manager-webhook-arvancloud"
 COPY --from=build /out/webhook /webhook
 USER 10001:10001
+EXPOSE 8443 8081
 ENTRYPOINT ["/webhook"]
