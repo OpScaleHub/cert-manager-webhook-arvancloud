@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.0.1](https://github.com/OpScaleHub/cert-manager-webhook-arvancloud/compare/v1.0.0...v1.0.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* **release:** cosign chart signing needs docker login; add workflow_dispatch tag re-publish ([e504d00](https://github.com/OpScaleHub/cert-manager-webhook-arvancloud/commit/e504d00a939dd5406e815975f68c0ffea7cdec11))
+
+
+### Documentation
+
+* note release-please PR check approval + bundle.yaml release asset ([c284f8f](https://github.com/OpScaleHub/cert-manager-webhook-arvancloud/commit/c284f8ff8f97e5dae5d51848d891c658819a3c34))
+* packages are public; document manual re-publish path ([5045222](https://github.com/OpScaleHub/cert-manager-webhook-arvancloud/commit/504522221ef96b2cf2c4bbfdb9d02af78fb7cca9))
+
+
+### Build & CI
+
+* stop committing deploy/bundle.yaml (drifts on every release) ([4392893](https://github.com/OpScaleHub/cert-manager-webhook-arvancloud/commit/43928931d51f268abe1720112245a559df0bae6c))
+
 ## 1.0.0 (2026-09-06)
 
 
