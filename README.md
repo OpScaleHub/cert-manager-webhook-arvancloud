@@ -207,12 +207,18 @@ from Conventional Commit messages — no manual tagging.
    created, then the same workflow:
    - builds & pushes the multi-arch image (`docker buildx`, `linux/amd64` +
      `linux/arm64`) tagged `X.Y.Z`, `X.Y`, `X`, `latest`;
-   - packages & pushes the chart to `oci://ghcr.io/opscalehub/charts` and
-     attaches the `.tgz` to the release;
+   - packages & pushes the chart to `oci://ghcr.io/opscalehub/charts`, and
+     attaches the `.tgz` + a rendered `bundle.yaml` to the release;
    - cosign **keyless-signs** the image and the chart, with an SBOM +
      build-provenance attestation.
 4. `pages.yml` republishes the Helm repo index so `helm repo add` sees the new
    version.
+
+The release PR is authored by `github-actions[bot]`, so its checks start as
+**"Action required"** — approve them (Actions tab, or the PR's checks panel)
+before merging. To skip this each time, give release-please a PAT via a
+`token:` input, or relax *Settings → Actions → General → Approval for workflow
+runs from…*.
 
 To re-publish artifacts for an existing tag (e.g. after a transient failure),
 run the `release` workflow manually with the `tag` input set to `vX.Y.Z`.
