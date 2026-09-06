@@ -214,13 +214,11 @@ from Conventional Commit messages — no manual tagging.
 4. `pages.yml` republishes the Helm repo index so `helm repo add` sees the new
    version.
 
-The first tagged release is pinned to `1.0.0` via `release-as` in
-`release-please-config.json`; remove that line after `v1.0.0` ships so
-subsequent versions auto-increment.
+To re-publish artifacts for an existing tag (e.g. after a transient failure),
+run the `release` workflow manually with the `tag` input set to `vX.Y.Z`.
 
-> GHCR packages are private on first publish — set the image and chart
-> packages to **Public** once (Package settings → Change visibility). They
-> auto-link to this repo via `org.opencontainers.image.source`.
+> The image and chart packages are public and auto-link to this repo via
+> `org.opencontainers.image.source`.
 
 ## License
 
