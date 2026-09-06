@@ -23,7 +23,6 @@ spec:
                 name: arvancloud-credentials
                 key: api-key
               ttl: 120
-              propagationCheck: true
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate

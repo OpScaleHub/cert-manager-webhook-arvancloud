@@ -6,10 +6,12 @@ import (
 	"net"
 	"strings"
 	"time"
+
+	"github.com/OpScaleHub/cert-manager-webhook-arvancloud/internal/obs"
 )
 
 // publicResolvers are queried directly (bypassing the pod's configured
-// resolver) to confirm a challenge TXT record is globally visible before
+// resolver) to confirm a challenge TXT record is publicly visible before
 // Present hands control back to cert-manager.
 var publicResolvers = []string{"1.1.1.1:53", "8.8.8.8:53"}
 
@@ -18,12 +20,19 @@ const (
 	// apiserver's default 60s --request-timeout.
 	defaultPropagationTimeout = 45 * time.Second
 	propagationInterval       = 5 * time.Second
+	// perLookupTimeout bounds a single resolver query so a blocked or
+	// slow-pathed egress to port 53 fails fast instead of stacking dial
+	// timeouts inside a single check cycle.
+	perLookupTimeout = 4 * time.Second
 )
 
 // waitForPropagation polls the public resolvers until every one of them
 // returns the expected TXT value for fqdn, or the timeout expires.
 // timeoutSeconds <= 0 selects defaultPropagationTimeout.
-func waitForPropagation(ctx context.Context, fqdn, expected string, timeoutSeconds int) error {
+func waitForPropagation(ctx context.Context, fqdn, expected string, timeoutSeconds int) (err error) {
+	start := time.Now()
+	defer func() { obs.ObservePropagationWait(start, err) }()
+
 	timeout := defaultPropagationTimeout
 	if timeoutSeconds > 0 {
 		timeout = time.Duration(timeoutSeconds) * time.Second
@@ -31,7 +40,15 @@ func waitForPropagation(ctx context.Context, fqdn, expected string, timeoutSecon
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	fqdn = strings.TrimSuffix(fqdn, ".")
+	// Keep the name fully qualified (trailing dot). Without it, Go's
+	// resolver applies /etc/resolv.conf's search list and ndots — in a
+	// Kubernetes pod that fans every check into several bogus
+	// *.svc.cluster.local queries against the public resolver, which can
+	// stall for many seconds.
+	if !strings.HasSuffix(fqdn, ".") {
+		fqdn += "."
+	}
+
 	ticker := time.NewTicker(propagationInterval)
 	defer ticker.Stop()
 
@@ -41,7 +58,7 @@ func waitForPropagation(ctx context.Context, fqdn, expected string, timeoutSecon
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for TXT %q to propagate to public resolvers", fqdn)
+			return fmt.Errorf("timed out after %s waiting for TXT %q to reach public resolvers", timeout, fqdn)
 		case <-ticker.C:
 		}
 	}
@@ -52,11 +69,13 @@ func allResolversSee(ctx context.Context, fqdn, expected string) bool {
 		r := &net.Resolver{
 			PreferGo: true,
 			Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-				d := net.Dialer{Timeout: 5 * time.Second}
+				d := net.Dialer{Timeout: perLookupTimeout}
 				return d.DialContext(ctx, network, addr)
 			},
 		}
-		values, err := r.LookupTXT(ctx, fqdn)
+		lookupCtx, cancel := context.WithTimeout(ctx, perLookupTimeout)
+		values, err := r.LookupTXT(lookupCtx, fqdn)
+		cancel()
 		if err != nil || !contains(values, expected) {
 			return false
 		}

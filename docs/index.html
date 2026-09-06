@@ -388,15 +388,14 @@ kubectl -n cert-manager create secret generic arvancloud-credentials \
               <span class="b">apiKeySecretRef</span>:
                 <span class="b">name</span>: arvancloud-credentials
                 <span class="b">key</span>: api-key
-              <span class="b">ttl</span>: 120
-              <span class="b">propagationCheck</span>: true</code></pre>
+              <span class="b">ttl</span>: 120</code></pre>
         </div>
 
         <div>
           <ul class="checks">
             <li><strong>Idempotent lifecycle.</strong> <code>Present</code> reuses an identical existing TXT record; <code>CleanUp</code> treats a missing record as success — no error loops.</li>
             <li><strong>Multi-level subdomains.</strong> Correctly resolves the zone apex for names like <code>*.apps.cluster.example.com</code>.</li>
-            <li><strong>Propagation gate.</strong> Blocks by default until <code>1.1.1.1</code> and <code>8.8.8.8</code> both serve the challenge record; set <code>propagationCheck: false</code> to opt out.</li>
+            <li><strong>Optional propagation gate.</strong> <code>propagationCheck: true</code> makes <code>Present</code> block until <code>1.1.1.1</code> and <code>8.8.8.8</code> serve the record — off by default, since cert-manager already self-checks DNS before validation.</li>
             <li><strong>Locked-down pod.</strong> Runs as non-root <code>10001</code>, read-only root filesystem, all capabilities dropped, <code>RuntimeDefault</code> seccomp.</li>
             <li><strong>Prometheus metrics.</strong> API latency &amp; error-rate histograms and challenge success/failure counters on <code>:8081/metrics</code>, with an optional <code>ServiceMonitor</code>.</li>
             <li><strong>Schema-validated chart.</strong> <code>values.schema.json</code> catches missing secret bindings and invalid replica counts at <code>helm install</code> time.</li>

@@ -22,7 +22,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cert-manager: ["v1.14.7", "v1.15.5", "v1.16.2"]
+        # release branch tips — avoids guessing exact patch tags
+        cert-manager: ["release-1.16", "release-1.18", "release-1.21"]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v5

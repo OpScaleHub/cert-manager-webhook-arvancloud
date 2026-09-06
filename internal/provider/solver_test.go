@@ -146,12 +146,12 @@ func TestLoadConfigRejectsNil(t *testing.T) {
 	}
 }
 
-func TestPropagationCheckDefaultsOn(t *testing.T) {
-	if !(arvanDNSProviderConfig{}).propagationCheckEnabled() {
-		t.Fatal("propagation check should default to enabled")
+func TestPropagationCheckDefaultsOff(t *testing.T) {
+	if (arvanDNSProviderConfig{}).propagationCheckEnabled() {
+		t.Fatal("propagation check should default to disabled")
 	}
-	if (arvanDNSProviderConfig{PropagationCheck: boolPtr(false)}).propagationCheckEnabled() {
-		t.Fatal("explicit false should disable propagation check")
+	if !(arvanDNSProviderConfig{PropagationCheck: boolPtr(true)}).propagationCheckEnabled() {
+		t.Fatal("explicit true should enable propagation check")
 	}
 }
 

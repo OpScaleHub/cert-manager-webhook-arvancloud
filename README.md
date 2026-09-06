@@ -22,8 +22,9 @@ used by `go-acme/lego`'s ArvanCloud provider.
 - **Hard 15s timeout** and bounded retries on every API call, so a slow
   ArvanCloud response never stalls a cert-manager queue worker.
 - **Multi-level subdomain** handling (`_acme-challenge.apps.cluster.example.com`).
-- **Public-resolver propagation check** (1.1.1.1 / 8.8.8.8) before `Present`
-  returns — on by default, opt-out.
+- **Optional** public-resolver propagation check (1.1.1.1 / 8.8.8.8) before
+  `Present` returns — off by default; cert-manager's own DNS self-check already
+  gates ACME validation.
 - **Pooled HTTP transport** shared process-wide (tuned keep-alives / idle conns).
 - **Prometheus metrics** (`/metrics` on `:8081`): API latency histograms, error
   rates, challenge success/failure counters; optional `ServiceMonitor`.
@@ -111,7 +112,6 @@ spec:
                 name: arvancloud-credentials
                 key: api-key
               ttl: 120
-              propagationCheck: true
 ```
 
 A staging example plus a test `Certificate` is in
@@ -124,8 +124,8 @@ A staging example plus a test `Certificate` is in
 | `apiKeySecretRef.name` / `.key` | yes | – | Secret holding the API key, in the Issuer's namespace (or the cluster resource namespace for a `ClusterIssuer`). |
 | `apiUrl` | no | `https://napi.arvancloud.ir` | Override the API base URL. |
 | `ttl` | no | `120` | TXT record TTL, seconds. |
-| `propagationCheck` | no | `true` | Block `Present` until `1.1.1.1` and `8.8.8.8` both serve the record. Set `false` to return as soon as the API accepts the record and rely on cert-manager's own DNS self-check. |
-| `propagationTimeoutSeconds` | no | `45` | Upper bound on the propagation wait. Keep below the apiserver `--request-timeout` (60s). |
+| `propagationCheck` | no | `false` | When `true`, block `Present` until `1.1.1.1` and `8.8.8.8` both serve the record. Usually unnecessary — cert-manager already self-checks DNS (`--dns01-recursive-nameservers`) before ACME validation, and a synchronous wait here adds latency to the webhook apiserver call. |
+| `propagationTimeoutSeconds` | no | `45` | Upper bound on the propagation wait when enabled. Keep below the apiserver `--request-timeout` (60s). |
 
 ## Observability
 
@@ -137,10 +137,18 @@ via `METRICS_BIND_ADDRESS`; empty disables). Metrics:
 | `arvancloud_webhook_api_request_duration_seconds` | histogram | `method`, `outcome` (`2xx`/`4xx`/`5xx`/`error`) |
 | `arvancloud_webhook_api_requests_total` | counter | `method`, `code` |
 | `arvancloud_webhook_solver_challenges_total` | counter | `action` (`present`/`cleanup`), `result` |
+| `arvancloud_webhook_solver_propagation_wait_seconds` | histogram | `outcome` (`ok`/`timeout`) — only when `propagationCheck` is enabled |
 
 Enable scraping with `--set metrics.serviceMonitor.enabled=true` (requires
 Prometheus Operator). Alert on rising `..._api_requests_total{code=~"429|5.."}`
 and `..._challenges_total{result="error"}`.
+
+**Slow issuance?** If `Present` calls are slow (visible as long
+`k8s.io/apiserver` "Create" traces in the webhook pod logs), check
+`..._api_request_duration_seconds` (is the ArvanCloud API slow?) and
+`..._propagation_wait_seconds` (is the check waiting on public resolvers?).
+Leaving `propagationCheck` off — the default — removes the propagation wait
+from the synchronous webhook call entirely.
 
 ## Development
 

@@ -49,10 +49,13 @@ type arvanDNSProviderConfig struct {
 	APIURL string `json:"apiUrl,omitempty"`
 	// TTL for the challenge TXT record, in seconds. Defaults to 120.
 	TTL int `json:"ttl,omitempty"`
-	// PropagationCheck controls whether Present blocks until the record is
-	// visible on public resolvers (1.1.1.1, 8.8.8.8). Defaults to true;
-	// set to false to return as soon as the ArvanCloud API accepts the
-	// record and rely on cert-manager's own DNS self-check instead.
+	// PropagationCheck, when true, makes Present block until the record is
+	// visible on public resolvers (1.1.1.1, 8.8.8.8) before returning.
+	// Defaults to false: cert-manager already runs its own DNS self-check
+	// (--dns01-recursive-nameservers) before asking the ACME server to
+	// validate, so this is redundant and only adds latency to the
+	// synchronous webhook call. Enable it only if that self-check is
+	// disabled or misconfigured.
 	PropagationCheck *bool `json:"propagationCheck,omitempty"`
 	// PropagationTimeoutSeconds bounds the propagation wait. Defaults to 45.
 	// Keep it below the webhook apiserver request timeout (60s) unless you
@@ -61,7 +64,7 @@ type arvanDNSProviderConfig struct {
 }
 
 func (c arvanDNSProviderConfig) propagationCheckEnabled() bool {
-	return c.PropagationCheck == nil || *c.PropagationCheck
+	return c.PropagationCheck != nil && *c.PropagationCheck
 }
 
 // Solver returns a cert-manager webhook.Solver backed by ArvanCloud DNS.

@@ -42,7 +42,27 @@ var (
 		Name:      "challenges_total",
 		Help:      "Total DNS-01 challenge operations handled by the webhook.",
 	}, []string{"action", "result"})
+
+	// PropagationWaitDuration tracks how long Present blocked on the
+	// optional public-resolver propagation check, by outcome ("ok" /
+	// "timeout").
+	PropagationWaitDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "arvancloud_webhook",
+		Subsystem: "solver",
+		Name:      "propagation_wait_seconds",
+		Help:      "Time Present spent waiting for the challenge record to reach public resolvers.",
+		Buckets:   []float64{0.1, 0.5, 1, 2, 5, 10, 20, 30, 45},
+	}, []string{"outcome"})
 )
+
+// ObservePropagationWait records one propagation-check wait.
+func ObservePropagationWait(start time.Time, err error) {
+	outcome := "ok"
+	if err != nil {
+		outcome = "timeout"
+	}
+	PropagationWaitDuration.WithLabelValues(outcome).Observe(time.Since(start).Seconds())
+}
 
 // ObserveAPIRequest records a single ArvanCloud API call.
 func ObserveAPIRequest(method string, statusCode int, err error, start time.Time) {
