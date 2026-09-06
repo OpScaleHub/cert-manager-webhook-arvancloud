@@ -1,0 +1,6 @@
+{
+	"apiKeySecretRef": {
+		"name": "arvancloud-credentials",
+		"key": "api-key"
+	}
+}

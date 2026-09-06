@@ -115,6 +115,33 @@ helm lint charts/arvancloud-webhook
 docker build -t webhook:dev .
 ```
 
+### Conformance testing
+
+`main_test.go` runs cert-manager's own [DNS-01 conformance test
+suite](https://github.com/cert-manager/cert-manager/tree/master/test/acme) --
+the standard every community solver runs against the real provider API
+before it's trusted with a real certificate. It spins up a local
+Kubernetes control plane (via `setup-envtest`) and calls `Present`/`CleanUp`
+against a real zone with a synthetic challenge -- no ACME order, no
+Let's Encrypt rate limits involved.
+
+```sh
+go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+ASSETS="$(~/go/bin/setup-envtest use 1.31.0 -p path)"
+export TEST_ASSET_ETCD="$ASSETS/etcd"
+export TEST_ASSET_KUBE_APISERVER="$ASSETS/kube-apiserver"
+export TEST_ASSET_KUBECTL="$ASSETS/kubectl"
+
+TEST_ZONE_NAME="yourzone.example." ARVANCLOUD_API_KEY=... go test -v -timeout 5m .
+```
+
+Requires a real ArvanCloud Machine User API key with DNS-records
+permission actually granted for the target zone -- a Machine User
+without that scope explicitly enabled gets `HTTP 403: Your access to
+this section is restricted.` from every call, not a clearer
+permission-denied message. Confirmed passing live against a real zone
+2026-09-06.
+
 Repository layout:
 
 ```
