@@ -8,12 +8,14 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write # keyless cosign signing (Sigstore OIDC)
+
+env:
+  HELM_VERSION: v3.18.4
 
 jobs:
   image:
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.meta.outputs.version }}
     steps:
       - uses: actions/checkout@v5
       - uses: docker/setup-qemu-action@v3
@@ -23,10 +25,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lowercase image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ env.IMAGE }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -44,19 +48,14 @@ jobs:
           sbom: true
 
       - uses: sigstore/cosign-installer@v3
-      - name: Sign image (keyless / Sigstore)
+      - name: Sign image + attest SBOM (keyless / Sigstore)
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          cosign sign --yes "ghcr.io/${{ github.repository }}@${DIGEST}"
-          cosign download sbom "ghcr.io/${{ github.repository }}@${DIGEST}" > sbom.spdx.json || true
-      - name: Attest SBOM
-        env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          if [ -s sbom.spdx.json ]; then
-            cosign attest --yes --predicate sbom.spdx.json --type spdxjson \
-              "ghcr.io/${{ github.repository }}@${DIGEST}"
+          set -euo pipefail
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+          if cosign download sbom "${IMAGE}@${DIGEST}" > sbom.spdx.json 2>/dev/null && [ -s sbom.spdx.json ]; then
+            cosign attest --yes --predicate sbom.spdx.json --type spdxjson "${IMAGE}@${DIGEST}"
           fi
 
   chart:
@@ -66,21 +65,22 @@ jobs:
       - uses: actions/checkout@v5
       - uses: azure/setup-helm@v4
         with:
-          version: v3.18.4
+          version: ${{ env.HELM_VERSION }}
       - uses: sigstore/cosign-installer@v3
       - name: Package, push and sign chart (GHCR OCI)
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
           helm package charts/arvancloud-webhook \
             --version "$VERSION" --app-version "$VERSION"
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
           helm push "arvancloud-webhook-${VERSION}.tgz" \
-            "oci://ghcr.io/${{ github.repository_owner }}/charts" 2> push.log
-          DIGEST="$(awk '/Digest: /{print $2}' push.log)"
-          cosign sign --yes \
-            "ghcr.io/${{ github.repository_owner }}/charts/arvancloud-webhook@${DIGEST}"
+            "oci://ghcr.io/${OWNER}/charts" 2> push.log
+          cat push.log
+          DIGEST="$(awk '/[Dd]igest: /{print $NF}' push.log)"
+          cosign sign --yes "ghcr.io/${OWNER}/charts/arvancloud-webhook@${DIGEST}"
 
   github-release:
     runs-on: ubuntu-latest

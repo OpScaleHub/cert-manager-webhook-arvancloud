@@ -37,7 +37,7 @@ jobs:
 
           # Package the chart and (re)build a merged repo index so
           # `helm repo add opscalehub https://opscalehub.github.io/...` works.
-          BASE_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          BASE_URL="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY##*/}"
           helm package charts/arvancloud-webhook --destination _site
           if curl -sfL "$BASE_URL/index.yaml" -o old-index.yaml; then
             helm repo index _site --url "$BASE_URL" --merge old-index.yaml
