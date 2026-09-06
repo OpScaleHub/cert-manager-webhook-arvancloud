@@ -21,7 +21,16 @@
       "release-as": "1.0.0",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
-        "charts/arvancloud-webhook/Chart.yaml",
+        {
+          "type": "yaml",
+          "path": "charts/arvancloud-webhook/Chart.yaml",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "yaml",
+          "path": "charts/arvancloud-webhook/Chart.yaml",
+          "jsonpath": "$.appVersion"
+        },
         "docs/index.html"
       ]
     }
