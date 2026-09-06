@@ -151,4 +151,9 @@ jobs:
           cat push.log
           DIGEST="$(awk '/[Dd]igest: /{print $NF}' push.log)"
           cosign sign --yes "ghcr.io/${OWNER}/charts/arvancloud-webhook@${DIGEST}"
-          gh release upload "$TAG" "arvancloud-webhook-${VERSION}.tgz" --clobber
+
+          # Pre-rendered manifests for GitOps users who want plain YAML.
+          helm template arvancloud-webhook charts/arvancloud-webhook \
+            --namespace cert-manager > bundle.yaml
+
+          gh release upload "$TAG" "arvancloud-webhook-${VERSION}.tgz" bundle.yaml --clobber

@@ -1,15 +1,20 @@
-# Rendered manifests
+# Rendered manifests (GitOps)
 
-`bundle.yaml` is the Helm chart rendered with default values into the
-`cert-manager` namespace, for GitOps tools (Argo CD, Flux) that consume plain
-manifests. Regenerate after chart changes (CI checks it is current, tolerating
-only cosmetic blank-line differences between Helm patch releases — CI pins
-Helm `v3.18.4`):
+Argo CD / Flux users normally point straight at the Helm chart
+(`charts/arvancloud-webhook`) and let the GitOps controller render it.
 
-```sh
-helm template arvancloud-webhook charts/arvancloud-webhook \
-  --namespace cert-manager > deploy/bundle.yaml
-```
+If you need **plain, pre-rendered manifests** instead:
 
-For anything other than the defaults, template the chart yourself with your own
-`--set` / `-f values.yaml` overrides rather than editing `bundle.yaml` by hand.
+- **Per release:** every [GitHub Release](https://github.com/OpScaleHub/cert-manager-webhook-arvancloud/releases)
+  attaches a `bundle.yaml` rendered from that exact chart version.
+- **Ad hoc / customised:** render it yourself with your own values —
+
+  ```sh
+  helm template arvancloud-webhook \
+    oci://ghcr.io/opscalehub/charts/arvancloud-webhook --version <VERSION> \
+    --namespace cert-manager \
+    -f my-values.yaml > bundle.yaml
+  ```
+
+A rendered bundle is intentionally **not** committed to the repo: it is
+version-stamped output and would drift from `Chart.yaml` on every release.

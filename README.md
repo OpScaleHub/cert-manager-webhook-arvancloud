@@ -188,7 +188,7 @@ internal/obs/        Prometheus metrics + diagnostic HTTP server
 internal/provider/   webhook.Solver impl + propagation check + tests + conformance
 main.go              apiserver entrypoint + metrics server
 charts/              Helm chart with values.schema.json + ServiceMonitor
-deploy/bundle.yaml   chart rendered with defaults, for GitOps
+deploy/README.md     GitOps notes (rendered bundle.yaml ships per release)
 docs/index.html      GitHub Pages landing page (dark-mode, zero-JS-framework)
 .github/workflows/   ci.yml, release.yml (release-please + signed image/chart),
                      pages.yml, compat.yml (cert-manager matrix + conformance)

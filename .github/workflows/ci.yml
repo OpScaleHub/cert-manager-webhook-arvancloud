@@ -52,15 +52,11 @@ jobs:
           version: ${{ env.HELM_VERSION }}
       - name: Lint chart
         run: helm lint charts/arvancloud-webhook
-      - name: Template chart
-        run: helm template t charts/arvancloud-webhook --namespace cert-manager > /dev/null
-      - name: Bundle is up to date
+      - name: Template chart (default + metrics variants)
         run: |
-          helm template arvancloud-webhook charts/arvancloud-webhook \
-            --namespace cert-manager > /tmp/bundle.rendered
-          # -B tolerates cosmetic blank-line changes between helm patch versions;
-          # any real template change still fails the job.
-          diff -u -B deploy/bundle.yaml /tmp/bundle.rendered
+          helm template t charts/arvancloud-webhook --namespace cert-manager > /dev/null
+          helm template t charts/arvancloud-webhook --namespace cert-manager \
+            --set metrics.serviceMonitor.enabled=true > /dev/null
 
   docker:
     runs-on: ubuntu-latest
