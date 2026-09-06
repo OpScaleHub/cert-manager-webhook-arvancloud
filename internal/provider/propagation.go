@@ -14,7 +14,9 @@ import (
 var publicResolvers = []string{"1.1.1.1:53", "8.8.8.8:53"}
 
 const (
-	defaultPropagationTimeout = 60 * time.Second
+	// defaultPropagationTimeout leaves headroom under the webhook
+	// apiserver's default 60s --request-timeout.
+	defaultPropagationTimeout = 45 * time.Second
 	propagationInterval       = 5 * time.Second
 )
 

@@ -54,9 +54,9 @@ type arvanDNSProviderConfig struct {
 	// set to false to return as soon as the ArvanCloud API accepts the
 	// record and rely on cert-manager's own DNS self-check instead.
 	PropagationCheck *bool `json:"propagationCheck,omitempty"`
-	// PropagationTimeoutSeconds bounds the propagation wait. Defaults to 60.
-	// Keep it below the Kubernetes apiserver request timeout (60s) unless
-	// you have raised --request-timeout for the webhook.
+	// PropagationTimeoutSeconds bounds the propagation wait. Defaults to 45.
+	// Keep it below the webhook apiserver request timeout (60s) unless you
+	// have raised --request-timeout for the webhook.
 	PropagationTimeoutSeconds int `json:"propagationTimeoutSeconds,omitempty"`
 }
 

@@ -125,7 +125,7 @@ A staging example plus a test `Certificate` is in
 | `apiUrl` | no | `https://napi.arvancloud.ir` | Override the API base URL. |
 | `ttl` | no | `120` | TXT record TTL, seconds. |
 | `propagationCheck` | no | `true` | Block `Present` until `1.1.1.1` and `8.8.8.8` both serve the record. Set `false` to return as soon as the API accepts the record and rely on cert-manager's own DNS self-check. |
-| `propagationTimeoutSeconds` | no | `60` | Upper bound on the propagation wait. Keep below the apiserver `--request-timeout` (60s). |
+| `propagationTimeoutSeconds` | no | `45` | Upper bound on the propagation wait. Keep below the apiserver `--request-timeout` (60s). |
 
 ## Observability
 
