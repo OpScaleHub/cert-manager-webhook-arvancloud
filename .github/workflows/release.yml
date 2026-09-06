@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)publish artifacts for, e.g. v1.0.0. Leave blank for normal release-please operation."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -16,16 +21,12 @@ env:
 
 jobs:
   # Maintains the release PR (CHANGELOG + version bumps in Chart.yaml and the
-  # landing page). Merging that PR creates the git tag + GitHub Release and
-  # flips release_created, which gates the publish jobs below.
+  # landing page). Merging that PR creates the git tag + GitHub Release.
   release-please:
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.rp.outputs.release_created }}
       tag_name: ${{ steps.rp.outputs.tag_name }}
-      version: ${{ steps.rp.outputs.version }}
-      major: ${{ steps.rp.outputs.major }}
-      minor: ${{ steps.rp.outputs.minor }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: rp
@@ -33,14 +34,49 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  image:
+  # Resolves what to publish: a freshly merged release, or a manual
+  # workflow_dispatch re-publish of an existing tag.
+  plan:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.p.outputs.publish }}
+      tag: ${{ steps.p.outputs.tag }}
+      version: ${{ steps.p.outputs.version }}
+      major: ${{ steps.p.outputs.major }}
+      minor: ${{ steps.p.outputs.minor }}
+    steps:
+      - id: p
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          RP_CREATED: ${{ needs.release-please.outputs.release_created }}
+          RP_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"; PUB=true
+          elif [ "$RP_CREATED" = "true" ]; then
+            TAG="$RP_TAG"; PUB=true
+          else
+            TAG=""; PUB=false
+          fi
+          VER="${TAG#v}"
+          {
+            echo "publish=$PUB"
+            echo "tag=$TAG"
+            echo "version=$VER"
+            echo "major=${VER%%.*}"
+            MINOR="${VER#*.}"; echo "minor=${MINOR%%.*}"
+          } >> "$GITHUB_OUTPUT"
+
+  image:
+    needs: [release-please, plan]
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ needs.plan.outputs.tag }}
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -55,9 +91,9 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=${{ needs.release-please.outputs.version }}
-            type=raw,value=${{ needs.release-please.outputs.major }}.${{ needs.release-please.outputs.minor }}
-            type=raw,value=${{ needs.release-please.outputs.major }}
+            type=raw,value=${{ needs.plan.outputs.version }}
+            type=raw,value=${{ needs.plan.outputs.major }}.${{ needs.plan.outputs.minor }}
+            type=raw,value=${{ needs.plan.outputs.major }}
             type=raw,value=latest
       - id: build
         uses: docker/build-push-action@v6
@@ -68,7 +104,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            VERSION=${{ needs.release-please.outputs.tag_name }}
+            VERSION=${{ needs.plan.outputs.tag }}
           provenance: true
           sbom: true
 
@@ -84,28 +120,33 @@ jobs:
           fi
 
   chart:
-    needs: [release-please, image]
-    if: needs.release-please.outputs.release_created == 'true'
+    needs: [plan, image]
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ needs.plan.outputs.tag }}
       - uses: azure/setup-helm@v4
         with:
           version: ${{ env.HELM_VERSION }}
       - uses: sigstore/cosign-installer@v3
+      # cosign resolves GHCR creds from ~/.docker/config.json — helm's own
+      # `registry login` writes elsewhere, so log in with docker too.
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Package, push and sign chart (GHCR OCI) + attach to release
         env:
-          VERSION: ${{ needs.release-please.outputs.version }}
-          TAG: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          TAG: ${{ needs.plan.outputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           OWNER="${GITHUB_REPOSITORY_OWNER,,}"
           helm package charts/arvancloud-webhook --version "$VERSION" --app-version "$VERSION"
-          echo "${{ secrets.GITHUB_TOKEN }}" | \
-            helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
           helm push "arvancloud-webhook-${VERSION}.tgz" "oci://ghcr.io/${OWNER}/charts" 2> push.log
           cat push.log
           DIGEST="$(awk '/[Dd]igest: /{print $NF}' push.log)"
